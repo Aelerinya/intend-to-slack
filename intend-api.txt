@@ -1,0 +1,259 @@
+Intend API v0.5
+
+This page offers endpoints that you can hit in order to do something, or get data.
+
+You may also be interested in:
+
+    MCP Server, to let AI assistants like Claude interact with your intentions, timer, and goals
+    Webhooks, to get automatically notified when:
+        the timer state changes
+        your "next action" changes (the Do tab)
+        changes to your intentions match specific filters (like the beeminder integration)
+    Custom intention sources, which lets you build an integration like the workflowy one by providing us with:
+        URL to get draft intentions from
+        URL to send updates of "this item has been completed"
+
+If you're just testing, or building something for yourself... use your personal auth token: [REMOVED]
+
+Append it to your request like this:
+[REMOVED]
+
+If you're wanting to set up an application that others can use, or release your own chrome extension, you may want to create an OAuth2 application.
+
+Data format:
+
+See this javascript file for some documentation of the sorts of objects returned by the API.
+API endpoints:
+Get active data
+
+Great for testing—returns the user's name and username:
+
+    GET /api/v0/u/me/userinfo.json
+
+Get playing immediately! If you have curl try running this in your terminal:
+
+curl 'https://intend.do/api/v0/u/me/userinfo.json?auth_token=[REMOVED]'
+
+and you should get
+
+{"username":"aelerinya","name":"Lucie"}
+
+Gets the user's list of goals, including each goal's current top priority:
+
+    GET /api/v0/u/me/goals/active.json
+
+The item below returns most of the data used to render the user's today page
+
+    GET /api/v0/u/me/today/full.json
+    which contains these sub-objects, that you can also access separately:
+        core ... GET /api/v0/u/me/today/core.json
+        drafts ... GET /api/v0/u/me/today/drafts.json
+        recent ... GET /api/v0/u/me/today/recent.json
+        settings ... GET /api/v0/u/me/today/settings.json
+        timer ... GET /api/v0/u/me/today/timer.json
+
+Posting intentions/outcomes
+
+Add new intention(s)
+
+    POST /api/v0/u/me/intentions   ...parameters: {
+        raw (string: Intend data in intentions format, one item per line. returns 400 if no valid intentions found)
+        ymd (string, optional: date in YYYY-MM-DD format. If omitted will use the current date based on user's dayStartTime. If in the past (ie a ymd before the one currently displayed on the today page) will just update the timeline. If tomorrow, will finish today & shift to "set intentions for tomorrow" mode. Does not play nice with dates further in the future—don't bother 😉)
+        makeCurrent (optional boolean to put the new item(s) above all other not-yet-done items)
+        makeAlmostCurrent (optional boolean to put the new item(s) immediately below the top not-yet-done item)
+        response (optional: what to return. options are)
+            "count": how many items on the list, total (default)
+            "ntp": the next action (ntp stands for "new tab page"; this is the data used by the New Tab Page extension — you may find it useful for similar applications. see documentation of ntp format below)
+            "today": the /today/full.json object
+    }
+
+Post outcomes
+
+    POST /api/v0/u/me/outcomes   ...parameters: {
+        raw (string: Intend data in outcomes format, one item per line. returns 400 if no valid data found)
+        ymd (string, optional: date in YYYY-MM-DD format. if omitted will use the current date based on user's dayStartTime)
+        response (optional: what to return. options are)
+            "today": the /today/full.json object
+            "count": how many completed outcomes for the day (default)
+    }
+
+New-tab-page extension endpoints
+
+These endpoints were made for the New Tab Page extension and they therefore return the ntp json format:
+{nexa: {/* see format here */}, colors, goalName, darkTheme, remainingcount, remainingDenominator}
+
+Get next action
+
+    GET /api/v0/u/me/newtabpage.json
+
+Returns the current next action with details, or indicates if there are no intentions set.
+
+Complete a specific intention
+
+    POST /api/v0/u/me/completeById/zid
+
+(A zid is an id for an intention or outcome—any such item. You can get the zid from newtabpage.json or today/full.json or today/core.json)
+
+Mark a specific intention as "not today"
+
+    POST /api/v0/u/me/nottodayById/zid
+
+Enter "now" mode
+Both of these put the system into "now" mode (like the now page) where when you complete the current intention it shows empty space instead of whatever's next on the list. This mostly affects what the ntp data returns.
+
+    POST /api/v0/u/me/setNowById/zid (enter "now" mode for this intention)
+    POST /api/v0/u/me/notNow (enter "now" mode with no current intention)
+
+Move an intention
+
+    POST /api/v0/u/me/moveToCurrent/zid (move item to above all other not-yet-done items)
+    POST /api/v0/u/me/deferNext/zid (move item to after the next outstanding item)
+    POST /api/v0/u/me/deferLast/zid (move item to the end of the list)
+
+Pick a random item and set it as the next action
+
+    POST /api/v0/u/me/getRandomNextAction
+
+Append to an intention
+
+    POST /api/v0/u/me/appendById/zid   ...parameters: {
+        text (string. text to append to the intention)
+    }
+
+Past data
+
+Retrieve past entries/days
+
+    GET /api/v0/u/me/timeline/entries.json
+    Optional query parameters: (add as ?)
+        limit (maximum to pull; default = 21)
+        startymd (the earliest date to include, in YYYY-MM-DD format)
+        endymd (the latest date to exclude, in YYYY-MM-DD format)
+        select (things to select separated by +. main options: intentions, outcomes, activity, goalCounts. default is all of these except activity)
+    Example: GET https://intend.do/api/v0/u/me/timeline/entries.json?startymd=2018-05-01&select=outcomes
+
+Retrieve weekly reviews
+
+There are two endpoints here, one of which shows what the app presents to you when you're writing your remarks, and the other of which shows you the remarks themselves. Let us know if you want monthly/quarterly/yearly reviews here!
+
+    GET /api/v0/u/me/reviews/:year/week/:weeknum/overview.json (the aggregated outcomes for that week, by goal, with most of the goal info as well)
+    GET /api/v0/u/me/reviews/:year/week/:weeknum/remarks.json (the review remarks for a given week)
+
+Timer
+
+Creating new work blocks ('dur', short for duration)
+
+    POST /api/v0/u/me/add_dur   ...parameters: {
+        ty (string, required. "type" (must be either 'tomato' or 'sand'))
+        min (number, required. "minutes" of duration. can be decimal)
+        foc (number, optional. "focusedness". 20% = 0.2, 100% = 1. pomos default to 120% = 1.2)
+        sCp (number, optional. "stamp completed". unix timestamp in millis. defaults)
+        zidToAssignTo (string, optional. assigns the dur to the intention with this zid, returns 406 error if not found. returns {intention: ...} if found)
+    }
+
+These two old endpoints both return {sparePomos: n, spareDurs: [...]}
+
+    POST /api/v0/u/me/addpomo
+    POST /api/v0/u/me/set_spare_pomos (takes a parameter n in the request body)
+
+The endpoints below control the actual timer itself. IMPORTANT: Note that the timer ticking logic is handled by the frontend on Intend, so while this system can let you start or stop pomodoros with a button, the actual tallying of pomodoros won't occur unless you have your today page or timer page open somewhere! Similarly, being in continuous/automatic mode will only cause the timer to continue if a tab is open.
+
+All of them return the timer object, which looks like
+
+Get current timer
+
+    GET /api/v0/u/me/today/timer/all
+
+Start pomodoro
+
+    POST /api/v0/u/me/today/timer/startpomodoro
+    Query parameters: duration (in minutes; if omitted, uses current setting)
+
+Start break
+
+    POST /api/v0/u/me/today/timer/startbreak
+    Query parameters: duration (in minutes; if omitted, uses current setting)
+
+Start hourglass timer
+
+    POST /api/v0/u/me/today/timer/hourglass
+    Query parameters: duration (in minutes; if omitted, uses 15 minutes)
+
+Pause timer
+
+    POST /api/v0/u/me/today/timer/pause
+
+Unpause timer
+
+    POST /api/v0/u/me/today/timer/unpause
+
+Cancel timer
+
+    POST /api/v0/u/me/today/timer/cancel
+
+Custom timer update
+
+    POST /api/v0/u/me/today/timer/ticker   ...parameters: {
+        mode (either "pomo" or "hourglass")
+        state (one of "inactive", "ticking", "breaking", "paused")
+        endTime (required if ticking or breaking: numerical unix timestamp in millis)
+        remainingSeconds (required if paused)
+        continuous (boolean; will stay the same if omitted) 
+    }
+    Returns 400 if invalid in some way (eg pomo+paused or missing required field)
+
+Beeminder
+
+Get settings
+
+    GET /api/v0/u/me/apps/beeminder/settings.json
+
+Put settings
+
+    PUT /api/v0/u/me/apps/beeminder/settings.json
+    everything goes inside a property called "settings"
+    {settings: {
+        intentionsBinary (beeminder goal slug for setting intentions at all)
+        outcomesBinary
+        outcomesPercentage
+        roomPresence
+        weeklyReviewCount
+        weeklyReviewComplete
+        monthlyReviewCount
+        monthlyReviewComplete
+        quarterlyReviewCount
+        quarterlyReviewComplete
+        arbitrary (array of "beemind arbitrary things" items)
+    }}
+    ...arbitrary object values: [{
+        beemgoal (string; beeminder goal slug for this arb match)
+        trackWhat (string enum: [
+            'exists' (intended)
+            'd' (completed)
+            'pd' (pomodoros completed)
+            'totalMinutes'
+            'focusedMinutes'
+            'number'
+            'sum'
+        ])
+        goalid (Intend goalid, 'misc' if misc-only)
+        textMatch (string; text or regex match)
+        useRegex (boolean; true if textMatch is regex)
+        isTextMatchInverse (boolean; true if counting only non-matches)
+        starred (boolean; true means match only starred items)
+        staked (boolean; true means match only items with $ at stake)
+        multiplier (number; undefined means x1)
+        paused (boolean; true means this beem arb doesn't fire)
+    }]
+
+Tell us what other endpoints you want
+
+Use the intercom UI via the circle in the bottom-right of the page
+
+    Writing
+    Features
+    FAQ
+    Pricing
+    About Us
+
+	
