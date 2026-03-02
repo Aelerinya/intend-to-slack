@@ -58,6 +58,22 @@ def fetch_time_entries(token: str, target_date: date) -> list[dict]:
     return response.json() or []
 
 
+def fetch_time_entries_range(token: str, start_date: date, end_date: date) -> list[dict]:
+    """Fetch time entries for a date range (inclusive of start, exclusive of end)."""
+    start = datetime.combine(start_date, datetime.min.time())
+    end = datetime.combine(end_date, datetime.min.time())
+
+    url = f"{TOGGL_API_URL}/me/time_entries"
+    params = {
+        "start_date": start.isoformat() + "Z",
+        "end_date": end.isoformat() + "Z",
+    }
+
+    response = httpx.get(url, auth=_get_auth(token), params=params)
+    response.raise_for_status()
+    return response.json() or []
+
+
 def get_target_project_ids(projects: list[dict]) -> dict[int, str]:
     """Find project IDs for target projects (case-insensitive).
 
@@ -84,9 +100,16 @@ def calculate_hours_by_project(
         project_id = entry.get("project_id")
         if project_id in project_ids:
             duration = entry.get("duration", 0)
-            # Negative duration means the timer is still running
             if duration > 0:
                 result[project_ids[project_id]] += duration
+            elif duration < 0:
+                # Negative duration means timer is running - calculate elapsed time
+                start_str = entry.get("start")
+                if start_str:
+                    start_time = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+                    now = datetime.now(start_time.tzinfo)
+                    elapsed = int((now - start_time).total_seconds())
+                    result[project_ids[project_id]] += max(0, elapsed)
 
     return result
 

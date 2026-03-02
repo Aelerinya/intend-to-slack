@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fetch today's CeSIA outcomes from Intend.do and Toggl time tracking."""
 
+import argparse
 from datetime import date
 
 from intend import (
@@ -21,24 +22,31 @@ from toggl import (
 )
 
 
-def format_intend_markdown(items: list[dict], today: str) -> str:
-    """Format Intend items as markdown."""
-    done = [item.get("t", "").strip() for item in items if item.get("d")]
-    not_done = [item.get("t", "").strip() for item in items if not item.get("d")]
+def is_day_summary(item: dict) -> bool:
+    """Check if item is a 'Day summary' entry to skip."""
+    text = item.get("t", "").strip().lower()
+    return text == "day summary"
 
-    lines = [f"## CeSIA Work - {today}"]
+
+def format_intend_slack(items: list[dict], today: str) -> str:
+    """Format Intend items as Slack mrkdwn."""
+    filtered = [item for item in items if not is_day_summary(item)]
+    done = [item.get("t", "").strip() for item in filtered if item.get("d")]
+    not_done = [item.get("t", "").strip() for item in filtered if not item.get("d")]
+
+    lines = [f"*CeSIA Work - {today}*"]
 
     if done:
         lines.append("")
         lines.append("*Done:*")
         for task in done:
-            lines.append(f"- {task}")
+            lines.append(f"• {task}")
 
     if not_done:
         lines.append("")
         lines.append("*Not done:*")
         for task in not_done:
-            lines.append(f"- {task}")
+            lines.append(f"• {task}")
 
     if not done and not not_done:
         lines.append("")
@@ -47,16 +55,15 @@ def format_intend_markdown(items: list[dict], today: str) -> str:
     return "\n".join(lines)
 
 
-def format_toggl_markdown(hours_by_project: dict[str, int], today: str) -> str:
-    """Format Toggl time entries as markdown."""
-    lines = [f"## Time Tracked"]
-    lines.append("")
+def format_toggl_slack(hours_by_project: dict[str, int]) -> str:
+    """Format Toggl time entries as Slack mrkdwn."""
+    lines = ["*Time Tracked*"]
 
     has_time = False
     for project_name, seconds in sorted(hours_by_project.items()):
         if seconds > 0:
             has_time = True
-            lines.append(f"- {project_name}: {format_duration(seconds)}")
+            lines.append(f"• {project_name}: {format_duration(seconds)}")
 
     if not has_time:
         lines.append("_No time tracked today._")
@@ -64,10 +71,12 @@ def format_toggl_markdown(hours_by_project: dict[str, int], today: str) -> str:
     return "\n".join(lines)
 
 
-def main():
-    """Main entry point."""
-    today_date = date.today()
+def build_message(target_date: date | None = None) -> str:
+    """Build the complete daily summary message."""
+    today_date = target_date or date.today()
     today_str = today_date.isoformat()
+
+    parts = []
 
     # Fetch Intend.do data
     intend_token = get_auth_token()
@@ -75,14 +84,12 @@ def main():
     cesia_goal_id = get_cesia_goal_id(goal_map)
 
     if not cesia_goal_id:
-        print(f"Error: Could not find CeSIA goal")
-        return
+        return "Error: Could not find CeSIA goal"
 
     intentions = fetch_intentions(intend_token, today_str)
     cesia_items = filter_cesia_items(intentions, cesia_goal_id)
 
-    intend_markdown = format_intend_markdown(cesia_items, today_str)
-    print(intend_markdown)
+    parts.append(format_intend_slack(cesia_items, today_str))
 
     # Fetch Toggl data
     try:
@@ -94,13 +101,34 @@ def main():
         if target_project_ids:
             entries = fetch_time_entries(toggl_token, today_date)
             hours_by_project = calculate_hours_by_project(entries, target_project_ids)
-
-            print()
-            toggl_markdown = format_toggl_markdown(hours_by_project, today_str)
-            print(toggl_markdown)
-    except ValueError as e:
+            parts.append(format_toggl_slack(hours_by_project))
+    except ValueError:
         # TOGGL_API_TOKEN not configured - skip Toggl section
         pass
+
+    return "\n\n".join(parts)
+
+
+def main():
+    """Main entry point."""
+    parser = argparse.ArgumentParser(description="Daily CeSIA work summary")
+    parser.add_argument(
+        "--slack", action="store_true", help="Post to Slack instead of stdout"
+    )
+    parser.add_argument(
+        "--date", type=date.fromisoformat, metavar="YYYY-MM-DD",
+        help="Date to summarize (default: today)"
+    )
+    args = parser.parse_args()
+
+    message = build_message(args.date)
+
+    if args.slack:
+        from slack import post_message
+
+        post_message(message)
+    else:
+        print(message)
 
 
 if __name__ == "__main__":

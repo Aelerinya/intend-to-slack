@@ -4,35 +4,61 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Python CLI tool that fetches intentions from the Intend.do API for a specific goal (CeSIA, goal code "4") and outputs a markdown summary of completed and incomplete tasks.
+Python CLI tools that fetch work data from Intend.do and Toggl APIs for the CeSIA goal (goal code "5") and output Slack-formatted summaries.
 
 ## Commands
 
-**Install dependencies:**
 ```bash
-uv sync
+uv sync                  # Install dependencies
+uv run intend-summary    # Daily summary: today's tasks + time tracked
+uv run weekly-recap      # Weekly summary: previous week's review notes + total hours
+uv run daily-plan        # Daily plan: today's planned tasks
 ```
 
-**Run the tool:**
+All commands support `--slack` flag to post directly to Slack instead of stdout:
 ```bash
-uv run intend-summary
+uv run intend-summary --slack
+uv run weekly-recap --slack
+uv run daily-plan --slack
 ```
 
 ## Configuration
 
-The tool requires an `INTEND_AUTH_TOKEN` environment variable. Store it in a `.env` file at the project root (this file is gitignored).
+Store API tokens in `.env` at project root:
+- `INTEND_AUTH_TOKEN` (required) - Intend.do API token
+- `TOGGL_API_TOKEN` (optional) - Toggl time tracking token
+- `SLACK_USER_TOKEN` (optional) - Slack user OAuth token (for `--slack` flag)
+- `SLACK_CHANNEL` (optional) - Slack channel ID or name (for `--slack` flag)
+
+### Setting up Slack integration
+
+1. Create a Slack app using `slack-app-manifest.yaml`
+2. Install the app to your workspace
+3. Copy the User OAuth Token to `SLACK_USER_TOKEN` in `.env`
+4. Set `SLACK_CHANNEL` to your target channel ID or name
 
 ## Architecture
 
-Single-file application (`summary.py`) with this flow:
-1. Loads auth token from `.env` via `python-dotenv`
-2. Fetches active goals from Intend.do API to find the CeSIA goal ID
-3. Fetches today's intentions from the timeline API
-4. Filters intentions to only those tagged with the CeSIA goal
-5. Outputs markdown with "Done" and "Not done" sections
+Four modules with clear responsibilities:
 
-## Intend.do API Reference
+- **intend.py** - Intend.do API: fetches goals, intentions, weekly remarks. Converts remarks HTML to Slack mrkdwn.
+- **toggl.py** - Toggl API: fetches workspaces, projects, time entries. Filters for target projects ("charbel admin", "cesia freelance").
+- **slack.py** - Slack API: posts messages using user token.
+- **summary.py** - Daily report: combines today's Intend tasks with Toggl time.
+- **weekly_recap.py** - Weekly report: previous week's review notes from Intend + total Toggl hours.
+- **daily_plan.py** - Daily plan: today's planned tasks from Intend.
 
-The `intend-api.txt` file contains the full Intend.do API v0.5 documentation. Key endpoints used:
-- `GET /api/v0/u/me/goals/active.json` - get goals with their codes and IDs
-- `GET /api/v0/u/me/timeline/entries.json` - get intentions/outcomes for a date range
+## Output Format
+
+All output uses Slack mrkdwn (not standard markdown). See `slack-formatting.md` for reference. Key differences:
+- Bold: `*text*` (not `**text**`)
+- Italic: `_text_`
+- No headers - use bold text instead
+- Lists: literal bullet `•` or `-` characters
+
+## API Reference
+
+The `intend-api.txt` file contains full Intend.do API v0.5 documentation. Key endpoints:
+- `GET /api/v0/u/me/goals/active.json` - goals with codes and IDs
+- `GET /api/v0/u/me/today/core.json` - today's intentions
+- `GET /api/v0/u/me/reviews/{year}/week/{week}/remarks.json` - weekly review notes

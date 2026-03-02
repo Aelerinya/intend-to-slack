@@ -9,3 +9,5 @@ dependencies = [
 
 [project.scripts]
 intend-summary = "summary:main"
+weekly-recap = "weekly_recap:main"
+daily-plan = "daily_plan:main"
