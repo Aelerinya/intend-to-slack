@@ -7,7 +7,7 @@ import httpx
 from dotenv import load_dotenv
 
 BASE_URL = "https://intend.do/api/v0/u/me"
-CESIA_GOAL_CODE = "5"
+CESIA_GOAL_NAME = "CeSIA"
 
 
 def get_auth_token() -> str:
@@ -20,7 +20,7 @@ def get_auth_token() -> str:
 
 
 def fetch_goals(auth_token: str) -> dict[str, str]:
-    """Fetch goals and return a mapping of goal ID to goal code."""
+    """Fetch goals and return a mapping of goal ID to goal name."""
     url = f"{BASE_URL}/goals/active.json"
     params = {"auth_token": auth_token}
 
@@ -30,7 +30,7 @@ def fetch_goals(auth_token: str) -> dict[str, str]:
     data = response.json()
     goals = data.get("goals", [])
 
-    return {goal["_id"]: goal["code"] for goal in goals}
+    return {goal["_id"]: goal["name"] for goal in goals}
 
 
 def fetch_intentions(auth_token: str, ymd: str) -> list[dict]:
@@ -46,9 +46,9 @@ def fetch_intentions(auth_token: str, ymd: str) -> list[dict]:
 
 
 def get_cesia_goal_id(goal_map: dict[str, str]) -> str | None:
-    """Find the goal ID for CeSIA (goal code 5)."""
-    for goal_id, code in goal_map.items():
-        if code == CESIA_GOAL_CODE:
+    """Find the goal ID for CeSIA by name."""
+    for goal_id, name in goal_map.items():
+        if name == CESIA_GOAL_NAME:
             return goal_id
     return None
 

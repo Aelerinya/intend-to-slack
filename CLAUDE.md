@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Python CLI tools that fetch work data from Intend.do and Toggl APIs for the CeSIA goal (goal code "5") and output Slack-formatted summaries.
+Python CLI tools that fetch work data from Intend.do and Toggl APIs for the CeSIA goal (matched by name "CeSIA") and output Slack-formatted summaries.
 
 ## Commands
 
