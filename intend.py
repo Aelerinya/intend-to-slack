@@ -7,7 +7,7 @@ import httpx
 from dotenv import load_dotenv
 
 BASE_URL = "https://intend.do/api/v0/u/me"
-CESIA_GOAL_NAME = "CeSIA"
+LIGHTCONE_GOAL_NAMES = ["Lightcone", "Move to the Bay"]
 
 
 def get_auth_token() -> str:
@@ -45,17 +45,22 @@ def fetch_intentions(auth_token: str, ymd: str) -> list[dict]:
     return data.get("list", [])
 
 
-def get_cesia_goal_id(goal_map: dict[str, str]) -> str | None:
-    """Find the goal ID for CeSIA by name."""
-    for goal_id, name in goal_map.items():
-        if name == CESIA_GOAL_NAME:
-            return goal_id
-    return None
+def get_lightcone_goal_ids(goal_map: dict[str, str]) -> list[tuple[str, str]]:
+    """Find goal IDs for Lightcone goals by name.
+
+    Returns a list of (goal_id, goal_name) tuples for matching goals.
+    """
+    return [
+        (goal_id, name)
+        for goal_id, name in goal_map.items()
+        if name in LIGHTCONE_GOAL_NAMES
+    ]
 
 
-def filter_cesia_items(items: list[dict], cesia_goal_id: str) -> list[dict]:
-    """Filter items to only CeSIA-related items."""
-    return [item for item in items if cesia_goal_id in item.get("gids", [])]
+def filter_lightcone_items(items: list[dict], goal_ids: list[tuple[str, str]]) -> list[dict]:
+    """Filter items to only Lightcone-related items (matching any goal ID)."""
+    id_set = {goal_id for goal_id, _ in goal_ids}
+    return [item for item in items if id_set.intersection(item.get("gids", []))]
 
 
 def fetch_weekly_remarks(auth_token: str, year: int, week: int) -> dict:

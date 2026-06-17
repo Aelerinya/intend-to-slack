@@ -1,4 +1,4 @@
-"""Weekly recap script for CeSIA work summary."""
+"""Weekly recap script for Lightcone work summary."""
 
 import argparse
 from datetime import date, timedelta
@@ -7,18 +7,9 @@ from intend import (
     fetch_goals,
     fetch_weekly_remarks,
     get_auth_token,
-    get_cesia_goal_id,
     get_goal_remarks,
+    get_lightcone_goal_ids,
     html_to_slack,
-)
-from toggl import (
-    calculate_hours_by_project,
-    fetch_projects,
-    fetch_time_entries_range,
-    fetch_workspace_id,
-    format_duration,
-    get_target_project_ids,
-    get_toggl_token,
 )
 
 
@@ -65,58 +56,39 @@ def build_message() -> str:
     # Header
     parts.append(f"*Weekly Recap - Week {week}, {year} ({date_range})*")
 
-    # Fetch CeSIA remarks from Intend.do
-    remarks_section = []
+    # Fetch Lightcone remarks from Intend.do
+    remarks_parts = []
     try:
         intend_token = get_auth_token()
         goals = fetch_goals(intend_token)
-        cesia_goal_id = get_cesia_goal_id(goals)
+        goal_ids = get_lightcone_goal_ids(goals)
 
-        if cesia_goal_id:
+        if goal_ids:
             remarks = fetch_weekly_remarks(intend_token, year, week)
-            goal_remarks = get_goal_remarks(remarks, cesia_goal_id)
-            if goal_remarks:
-                remarks_section.append(html_to_slack(goal_remarks))
-            else:
-                remarks_section.append("_No review notes for this week._")
+            for goal_id, goal_name in goal_ids:
+                goal_remarks = get_goal_remarks(remarks, goal_id)
+                if goal_remarks:
+                    content = html_to_slack(goal_remarks)
+                    if len(goal_ids) > 1:
+                        remarks_parts.append(f"*{goal_name}*\n{content}")
+                    else:
+                        remarks_parts.append(content)
+
+            if not remarks_parts:
+                remarks_parts.append("_No review notes for this week._")
         else:
-            remarks_section.append("_CeSIA goal not found._")
+            remarks_parts.append("_Lightcone goals not found._")
     except ValueError as e:
-        remarks_section.append(f"_Error: {e}_")
+        remarks_parts.append(f"_Error: {e}_")
 
-    parts.append("\n".join(remarks_section))
-
-    # Fetch Toggl hours
-    toggl_lines = ["*Time Tracked*"]
-    try:
-        toggl_token = get_toggl_token()
-        workspace_id = fetch_workspace_id(toggl_token)
-        projects = fetch_projects(toggl_token, workspace_id)
-        project_ids = get_target_project_ids(projects)
-
-        if project_ids:
-            entries = fetch_time_entries_range(toggl_token, week_start, week_end)
-            hours_by_project = calculate_hours_by_project(entries, project_ids)
-
-            total_seconds = 0
-            for project_name, seconds in sorted(hours_by_project.items()):
-                toggl_lines.append(f"• {project_name}: {format_duration(seconds)}")
-                total_seconds += seconds
-
-            toggl_lines.append(f"*Total: {format_duration(total_seconds)}*")
-        else:
-            toggl_lines.append("_No target projects found._")
-    except ValueError as e:
-        toggl_lines.append(f"_Error: {e}_")
-
-    parts.append("\n".join(toggl_lines))
+    parts.append("\n\n".join(remarks_parts))
 
     return "\n\n".join(parts)
 
 
 def main() -> None:
-    """Generate weekly recap for CeSIA work (Slack mrkdwn format)."""
-    parser = argparse.ArgumentParser(description="Weekly CeSIA work recap")
+    """Generate weekly recap for Lightcone work (Slack mrkdwn format)."""
+    parser = argparse.ArgumentParser(description="Weekly Lightcone work recap")
     parser.add_argument(
         "--slack", action="store_true", help="Post to Slack instead of stdout"
     )

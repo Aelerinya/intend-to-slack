@@ -1,6 +1,6 @@
 display_information:
-  name: Intend to Slack
-  description: Post daily work summaries from Intend.do to Slack
+  name: Lightcone work bot
+  description: Daily/weekly work summaries from Intend.do
   background_color: "#4A154B"
 
 oauth_config:

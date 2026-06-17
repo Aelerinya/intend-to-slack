@@ -1,4 +1,4 @@
-"""Daily plan script for CeSIA work."""
+"""Daily plan script for Lightcone work."""
 
 import argparse
 from datetime import date
@@ -6,9 +6,9 @@ from datetime import date
 from intend import (
     fetch_goals,
     fetch_intentions,
-    filter_cesia_items,
+    filter_lightcone_items,
     get_auth_token,
-    get_cesia_goal_id,
+    get_lightcone_goal_ids,
 )
 
 
@@ -23,7 +23,7 @@ def format_daily_plan_slack(items: list[dict], today: str) -> str:
     filtered = [item for item in items if not is_day_summary(item)]
     tasks = [item.get("t", "").strip() for item in filtered]
 
-    lines = [f"*CeSIA Plan - {today}*"]
+    lines = [f"*Lightcone Plan - {today}*"]
 
     if tasks:
         lines.append("")
@@ -31,7 +31,7 @@ def format_daily_plan_slack(items: list[dict], today: str) -> str:
             lines.append(f"• {task}")
     else:
         lines.append("")
-        lines.append("_No CeSIA items planned for today._")
+        lines.append("_No Lightcone items planned for today._")
 
     return "\n".join(lines)
 
@@ -43,20 +43,20 @@ def build_message() -> str:
 
     intend_token = get_auth_token()
     goal_map = fetch_goals(intend_token)
-    cesia_goal_id = get_cesia_goal_id(goal_map)
+    goal_ids = get_lightcone_goal_ids(goal_map)
 
-    if not cesia_goal_id:
-        return "Error: Could not find CeSIA goal"
+    if not goal_ids:
+        return "Error: Could not find Lightcone goals"
 
     intentions = fetch_intentions(intend_token, today_str)
-    cesia_items = filter_cesia_items(intentions, cesia_goal_id)
+    items = filter_lightcone_items(intentions, goal_ids)
 
-    return format_daily_plan_slack(cesia_items, today_str)
+    return format_daily_plan_slack(items, today_str)
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="Daily CeSIA work plan")
+    parser = argparse.ArgumentParser(description="Daily Lightcone work plan")
     parser.add_argument(
         "--slack", action="store_true", help="Post to Slack instead of stdout"
     )

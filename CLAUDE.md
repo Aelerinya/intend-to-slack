@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Python CLI tools that fetch work data from Intend.do and Toggl APIs for the CeSIA goal (matched by name "CeSIA") and output Slack-formatted summaries.
+Python CLI tools that fetch work data from Intend.do for the Lightcone goals ("Lightcone" and "Move to the Bay") and output Slack-formatted summaries.
 
 ## Commands
 
 ```bash
 uv sync                  # Install dependencies
-uv run intend-summary    # Daily summary: today's tasks + time tracked
-uv run weekly-recap      # Weekly summary: previous week's review notes + total hours
+uv run intend-summary    # Daily summary: today's tasks (done/not done)
+uv run weekly-recap      # Weekly summary: previous week's review notes
 uv run daily-plan        # Daily plan: today's planned tasks
 ```
 
@@ -26,7 +26,6 @@ uv run daily-plan --slack
 
 Store API tokens in `.env` at project root:
 - `INTEND_AUTH_TOKEN` (required) - Intend.do API token
-- `TOGGL_API_TOKEN` (optional) - Toggl time tracking token
 - `SLACK_USER_TOKEN` (optional) - Slack user OAuth token (for `--slack` flag)
 - `SLACK_CHANNEL` (optional) - Slack channel ID or name (for `--slack` flag)
 
@@ -41,11 +40,10 @@ Store API tokens in `.env` at project root:
 
 Four modules with clear responsibilities:
 
-- **intend.py** - Intend.do API: fetches goals, intentions, weekly remarks. Converts remarks HTML to Slack mrkdwn.
-- **toggl.py** - Toggl API: fetches workspaces, projects, time entries. Filters for target projects ("charbel admin", "cesia freelance").
+- **intend.py** - Intend.do API: fetches goals, intentions, weekly remarks. Filters by "Lightcone" and "Move to the Bay" goals. Converts remarks HTML to Slack mrkdwn.
 - **slack.py** - Slack API: posts messages using user token.
-- **summary.py** - Daily report: combines today's Intend tasks with Toggl time.
-- **weekly_recap.py** - Weekly report: previous week's review notes from Intend + total Toggl hours.
+- **summary.py** - Daily report: today's Intend tasks (done/not done).
+- **weekly_recap.py** - Weekly report: previous week's review notes from Intend for each goal.
 - **daily_plan.py** - Daily plan: today's planned tasks from Intend.
 
 ## Output Format
