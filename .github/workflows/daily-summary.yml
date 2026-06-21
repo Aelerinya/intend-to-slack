@@ -1,0 +1,44 @@
+name: Daily Intend Summary
+
+on:
+  schedule:
+    # 9pm Pacific = 04:00 UTC (PDT) or 05:00 UTC (PST). Trigger both; the
+    # gate step below runs the job only when it is actually 9pm in Pacific time.
+    - cron: '0 4 * * *'
+    - cron: '0 5 * * *'
+  workflow_dispatch: {}   # manual trigger for testing
+
+jobs:
+  post-summary:
+    runs-on: ubuntu-latest
+    env:
+      TZ: America/Los_Angeles
+      INTEND_AUTH_TOKEN: ${{ secrets.INTEND_AUTH_TOKEN }}
+      SLACK_USER_TOKEN: ${{ secrets.SLACK_USER_TOKEN }}
+      SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
+    steps:
+      - name: Gate on Pacific weekday + 9pm
+        id: gate
+        run: |
+          hour=$(date +%H)   # uses TZ=America/Los_Angeles
+          dow=$(date +%u)    # 1=Mon .. 7=Sun
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual run — proceeding."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif [ "$hour" = "21" ] && [ "$dow" -le 5 ]; then
+            echo "9pm Pacific weekday — proceeding."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping: Pacific time ${hour}:00, day-of-week ${dow}."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: astral-sh/setup-uv@v5
+        if: steps.gate.outputs.run == 'true'
+
+      - name: Post summary to Slack
+        if: steps.gate.outputs.run == 'true'
+        run: uv run intend-summary --slack
