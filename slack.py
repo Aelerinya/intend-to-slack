@@ -45,8 +45,12 @@ def post_message(text: str) -> None:
     token = get_slack_token()
     channel = get_slack_channel()
 
-    # Add bot attribution note
-    text_with_note = f"{text}\n\n_Posted automatically via intend-to-slack_"
+    # Add bot attribution note with a ping to verify the content.
+    text_with_note = (
+        f"{text}\n\n"
+        "<@U07NF53BXK7> _Posted automatically via intend-to-slack — "
+        "please verify the content and edit if needed._"
+    )
 
     response = httpx.post(
         "https://slack.com/api/chat.postMessage",
