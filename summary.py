@@ -94,7 +94,9 @@ def build_message(target_date: date | None = None) -> str:
     intentions = fetch_intentions(intend_token, today_str)
     items = filter_lightcone_items(intentions, goal_ids)
 
-    return format_intend_slack(items, today_str, goal_ids)
+    summary = format_intend_slack(items, today_str, goal_ids)
+    # Ping so the summary can be reviewed and edited if needed.
+    return f"<@U07NF53BXK7>\n{summary}"
 
 
 def main():

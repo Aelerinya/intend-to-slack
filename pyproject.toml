@@ -11,3 +11,10 @@ dependencies = [
 intend-summary = "summary:main"
 weekly-recap = "weekly_recap:main"
 daily-plan = "daily_plan:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["summary", "intend", "toggl", "slack", "daily_plan", "weekly_recap"]
