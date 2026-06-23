@@ -49,6 +49,7 @@ def post_message(text: str) -> None:
     text_with_note = (
         f"{text}\n\n"
         " _Posted automatically via intend-to-slack — (<@U07NF53BXK7> check if it's accurate)_"
+    )
 
     response = httpx.post(
         "https://slack.com/api/chat.postMessage",
