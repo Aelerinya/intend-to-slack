@@ -17,19 +17,30 @@ jobs:
       SLACK_USER_TOKEN: ${{ secrets.SLACK_USER_TOKEN }}
       SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
     steps:
-      - name: Gate on Pacific weekday + 9pm
+      - name: Gate on Pacific weekday + correct DST cron
         id: gate
         run: |
-          hour=$(date +%H)   # uses TZ=America/Los_Angeles
-          dow=$(date +%u)    # 1=Mon .. 7=Sun
+          # GitHub Actions runs scheduled jobs late under load (often 20-60min),
+          # so we cannot gate on the exact wall-clock hour. Instead, pick the one
+          # cron that corresponds to 21:00 Pacific given the current DST offset:
+          #   PDT (-0700): 21:00 Pacific == 04:00 UTC
+          #   PST (-0800): 21:00 Pacific == 05:00 UTC
+          dow=$(date +%u)    # 1=Mon .. 7=Sun, in TZ=America/Los_Angeles
+          offset=$(date +%z) # -0700 (PDT) or -0800 (PST)
+          schedule="${{ github.event.schedule }}"
+          if [ "$offset" = "-0700" ]; then
+            want_cron='0 4 * * *'
+          else
+            want_cron='0 5 * * *'
+          fi
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "Manual run — proceeding."
             echo "run=true" >> "$GITHUB_OUTPUT"
-          elif [ "$hour" = "21" ] && [ "$dow" -le 5 ]; then
-            echo "9pm Pacific weekday — proceeding."
+          elif [ "$dow" -le 5 ] && [ "$schedule" = "$want_cron" ]; then
+            echo "9pm Pacific weekday (offset ${offset}, cron '${schedule}') — proceeding."
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Skipping: Pacific time ${hour}:00, day-of-week ${dow}."
+            echo "Skipping: offset ${offset}, day-of-week ${dow}, cron '${schedule}' (wanted '${want_cron}')."
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
 
