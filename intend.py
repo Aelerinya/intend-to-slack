@@ -7,7 +7,7 @@ import httpx
 from dotenv import load_dotenv
 
 BASE_URL = "https://intend.do/api/v0/u/me"
-LIGHTCONE_GOAL_NAMES = ["Lightcone", "Move to the Bay"]
+LIGHTCONE_GOAL_NAMES = ["Lightcone"]
 
 
 def get_auth_token() -> str:
