@@ -4,8 +4,8 @@ import argparse
 from datetime import date
 
 from intend import (
+    fetch_day_items,
     fetch_goals,
-    fetch_intentions,
     filter_lightcone_items,
     get_auth_token,
     get_lightcone_goal_ids,
@@ -36,11 +36,12 @@ def format_daily_plan_slack(items: list[dict], today: str) -> str:
     return "\n".join(lines)
 
 
-def build_message() -> str:
-    """Build the complete daily plan message."""
-    today_date = date.today()
-    today_str = today_date.isoformat()
+def build_message(target_date: date | None = None) -> str:
+    """Build the complete daily plan message.
 
+    With no target date, uses Intend's current day rather than the local
+    calendar date, since Intend's day rolls over at the user's dayStartTime.
+    """
     intend_token = get_auth_token()
     goal_map = fetch_goals(intend_token)
     goal_ids = get_lightcone_goal_ids(goal_map)
@@ -48,10 +49,12 @@ def build_message() -> str:
     if not goal_ids:
         return "Error: Could not find Lightcone goals"
 
-    intentions = fetch_intentions(intend_token, today_str)
-    items = filter_lightcone_items(intentions, goal_ids)
+    ymd, day_items = fetch_day_items(
+        intend_token, target_date.isoformat() if target_date else None
+    )
+    items = filter_lightcone_items(day_items, goal_ids)
 
-    return format_daily_plan_slack(items, today_str)
+    return format_daily_plan_slack(items, ymd)
 
 
 def main():
@@ -60,9 +63,13 @@ def main():
     parser.add_argument(
         "--slack", action="store_true", help="Post to Slack instead of stdout"
     )
+    parser.add_argument(
+        "--date", type=date.fromisoformat, metavar="YYYY-MM-DD",
+        help="Date to plan for (default: today)"
+    )
     args = parser.parse_args()
 
-    message = build_message()
+    message = build_message(args.date)
 
     if args.slack:
         from slack import post_message

@@ -5,8 +5,8 @@ import argparse
 from datetime import date
 
 from intend import (
+    fetch_day_items,
     fetch_goals,
-    fetch_intentions,
     filter_lightcone_items,
     get_auth_token,
     get_lightcone_goal_ids,
@@ -38,10 +38,10 @@ def format_intend_slack(
     done = [item.get("t", "").strip() for item in done_items]
     not_done = [item.get("t", "").strip() for item in filtered if not item.get("d")]
 
+    day_of_week = date.fromisoformat(today).strftime("%A")
     lines = []
 
     if done:
-        day_of_week = date.fromisoformat(today).strftime("%A")
         lines.append(f"*Done this {day_of_week}:*")
 
         # Group done items by goal
@@ -74,16 +74,17 @@ def format_intend_slack(
             lines.append(f"• {task}")
 
     if not done and not not_done:
-        lines.append("_No Lightcone items today._")
+        lines.append(f"_No Lightcone items for {day_of_week} {today}._")
 
     return "\n".join(lines)
 
 
 def build_message(target_date: date | None = None) -> str:
-    """Build the complete daily summary message."""
-    today_date = target_date or date.today()
-    today_str = today_date.isoformat()
+    """Build the complete daily summary message.
 
+    With no target date, summarizes Intend's current day rather than the local
+    calendar date, since Intend's day rolls over at the user's dayStartTime.
+    """
     intend_token = get_auth_token()
     goal_map = fetch_goals(intend_token)
     goal_ids = get_lightcone_goal_ids(goal_map)
@@ -91,10 +92,12 @@ def build_message(target_date: date | None = None) -> str:
     if not goal_ids:
         return "Error: Could not find Lightcone goals"
 
-    intentions = fetch_intentions(intend_token, today_str)
-    items = filter_lightcone_items(intentions, goal_ids)
+    ymd, day_items = fetch_day_items(
+        intend_token, target_date.isoformat() if target_date else None
+    )
+    items = filter_lightcone_items(day_items, goal_ids)
 
-    return format_intend_slack(items, today_str, goal_ids)
+    return format_intend_slack(items, ymd, goal_ids)
 
 
 def main():

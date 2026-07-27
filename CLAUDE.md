@@ -22,6 +22,16 @@ uv run weekly-recap --slack
 uv run daily-plan --slack
 ```
 
+`intend-summary` and `daily-plan` also take `--date YYYY-MM-DD` to report on a
+past day:
+```bash
+uv run intend-summary --date 2026-07-25
+```
+
+With no `--date`, both use Intend's current day (`ymd` from `today/core.json`),
+not the local calendar date — Intend's day rolls over at the user's
+dayStartTime, so running late at night would otherwise report the wrong day.
+
 ## Configuration
 
 Store API tokens in `.env` at project root:
@@ -58,5 +68,15 @@ All output uses Slack mrkdwn (not standard markdown). See `slack-formatting.md` 
 
 The `intend-api.txt` file contains full Intend.do API v0.5 documentation. Key endpoints:
 - `GET /api/v0/u/me/goals/active.json` - goals with codes and IDs
-- `GET /api/v0/u/me/today/core.json` - today's intentions
+- `GET /api/v0/u/me/today/core.json` - today's intentions (current day only)
+- `GET /api/v0/u/me/timeline/entries.json?startymd=&endymd=` - past days (`endymd` exclusive)
 - `GET /api/v0/u/me/reviews/{year}/week/{week}/remarks.json` - weekly review notes
+
+The today page and the timeline are separate stores: `today/core.json` ignores
+any date and always returns the current day, while the timeline has no entry for
+the current day's outcomes. `intend.fetch_day_items()` routes between them. Past
+days split into `intentions` (leftovers) and `outcomes` (final state, wins on
+conflict) and include blank placeholder rows that must be dropped.
+
+Do not pass `select` to `timeline/entries.json` — its `+`-separated value gets
+percent-encoded and the API silently returns stub entries.

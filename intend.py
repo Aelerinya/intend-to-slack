@@ -2,6 +2,7 @@
 
 import os
 import re
+from datetime import date, timedelta
 
 import httpx
 from dotenv import load_dotenv
@@ -33,16 +34,91 @@ def fetch_goals(auth_token: str) -> dict[str, str]:
     return {goal["_id"]: goal["name"] for goal in goals}
 
 
-def fetch_intentions(auth_token: str, ymd: str) -> list[dict]:
-    """Fetch today's intentions from Intend.do API (including extra outcomes)."""
+def fetch_today_core(auth_token: str) -> dict:
+    """Fetch the today page's core object (current day's merged item list).
+
+    The `ymd` field is Intend's notion of "today", which follows the user's
+    dayStartTime and can differ from the local calendar date (e.g. after
+    midnight but before the day rolls over).
+    """
     url = f"{BASE_URL}/today/core.json"
     params = {"auth_token": auth_token}
 
     response = httpx.get(url, params=params)
     response.raise_for_status()
 
-    data = response.json()
-    return data.get("list", [])
+    return response.json()
+
+
+def fetch_timeline_entry(auth_token: str, ymd: str) -> dict | None:
+    """Fetch a single past day's timeline entry, or None if there is no data."""
+    next_day = (date.fromisoformat(ymd) + timedelta(days=1)).isoformat()
+    url = f"{BASE_URL}/timeline/entries.json"
+    # No `select`: its "+"-separated syntax gets percent-encoded and the API
+    # then returns a stub entry. The default selection already covers what we
+    # need (intentions and outcomes).
+    params = {
+        "auth_token": auth_token,
+        "startymd": ymd,
+        "endymd": next_day,  # endymd is exclusive
+    }
+
+    response = httpx.get(url, params=params)
+    response.raise_for_status()
+
+    for entry in response.json():
+        if entry.get("ymd") == ymd:
+            return entry
+    return None
+
+
+def merge_day_items(intentions: list[dict], outcomes: list[dict]) -> list[dict]:
+    """Merge a past day's intentions and outcomes into one list, keyed by zid.
+
+    A past day's outcomes carry the final done/not-done state and repeat the
+    items that were planned, so outcomes win on conflict. Plan order is kept
+    first, with items only recorded as outcomes appended after.
+    """
+    merged: dict[str, dict] = {}
+    for item in [*intentions, *outcomes]:
+        zid = item.get("zid") or item.get("_id", "")
+        if zid in merged:
+            merged[zid].update(item)
+        else:
+            merged[zid] = dict(item)
+    return list(merged.values())
+
+
+def fetch_day_items(auth_token: str, ymd: str | None = None) -> tuple[str, list[dict]]:
+    """Fetch one day's items (intentions plus outcomes) from Intend.do.
+
+    Pass `ymd` as YYYY-MM-DD for a specific day, or None for Intend's current
+    day. Returns (ymd, items) so callers label the report with the date the
+    data actually came from.
+
+    The today page and the timeline are separate stores: the current day only
+    exists on the today page, and past days are only complete in the timeline.
+    """
+    core = fetch_today_core(auth_token)
+    current_ymd = core.get("ymd", "")
+
+    if ymd is None or ymd == current_ymd:
+        return current_ymd, _drop_blank(core.get("list", []))
+
+    entry = fetch_timeline_entry(auth_token, ymd)
+    if entry is None:
+        return ymd, []
+
+    items = merge_day_items(
+        entry.get("intentions", {}).get("list", []) or [],
+        entry.get("outcomes", {}).get("list", []) or [],
+    )
+    return ymd, _drop_blank(items)
+
+
+def _drop_blank(items: list[dict]) -> list[dict]:
+    """Drop the empty placeholder rows the timeline returns (blank text)."""
+    return [item for item in items if item.get("t", "").strip()]
 
 
 def get_lightcone_goal_ids(goal_map: dict[str, str]) -> list[tuple[str, str]]:
